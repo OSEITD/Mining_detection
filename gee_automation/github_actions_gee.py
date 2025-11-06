@@ -21,7 +21,8 @@ def initialize_earth_engine():
         try:
             # Parse token if it's JSON
             credentials = json.loads(ee_token)
-            ee.Initialize(credentials=credentials)
+            # Initialize with high-volume endpoint (no project needed for legacy auth)
+            ee.Initialize(credentials=credentials, opt_url='https://earthengine-highvolume.googleapis.com')
             print("✅ Earth Engine initialized successfully")
             return True
         except Exception as e:
@@ -43,7 +44,7 @@ def initialize_earth_engine():
     
     # Fallback: Try default authentication
     try:
-        ee.Initialize()
+        ee.Initialize(opt_url='https://earthengine-highvolume.googleapis.com')
         print("✅ Earth Engine initialized with default credentials")
         return True
     except Exception as e:
