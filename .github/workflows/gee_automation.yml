@@ -1,0 +1,78 @@
+name: Automated Satellite Data Collection
+
+on:
+  # Run every 5 days at 2 AM UTC
+  schedule:
+    - cron: '0 2 */5 * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'Number of days to look back for imagery'
+        required: false
+        default: '30'
+
+jobs:
+  fetch-satellite-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: 📦 Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install earthengine-api>=0.1.300
+          pip install supabase>=1.0.0
+          echo "✅ Dependencies installed"
+      
+      - name: 🌍 Run GEE data collection
+        env:
+          EARTHENGINE_TOKEN: ${{ secrets.EARTHENGINE_TOKEN }}
+          GEE_SERVICE_ACCOUNT: ${{ secrets.GEE_SERVICE_ACCOUNT }}
+          GEE_PRIVATE_KEY: ${{ secrets.GEE_PRIVATE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python gee_automation/github_actions_gee.py
+      
+      - name: ✅ Completion summary
+        if: success()
+        run: |
+          echo "============================================================"
+          echo "✅ SATELLITE DATA COLLECTION SUCCESSFUL"
+          echo "============================================================"
+          echo ""
+          echo "📅 Completed: $(date)"
+          echo "🌍 Source: Google Earth Engine (Sentinel-2)"
+          echo "☁️  Storage: Supabase"
+          echo ""
+          echo "🔗 Check your data:"
+          echo "   Dashboard: ${{ secrets.SUPABASE_URL }}"
+          echo "   Table: satellite_updates"
+          echo ""
+          echo "============================================================"
+      
+      - name: ❌ Failure notification
+        if: failure()
+        run: |
+          echo "============================================================"
+          echo "❌ WORKFLOW FAILED"
+          echo "============================================================"
+          echo ""
+          echo "Please check the logs above for error details."
+          echo ""
+          echo "Common issues:"
+          echo "  1. EARTHENGINE_TOKEN secret not set or invalid"
+          echo "  2. SUPABASE_URL or SUPABASE_KEY missing"
+          echo "  3. No imagery available for the time period"
+          echo ""
+          echo "📖 See: gee_automation/GITHUB_ACTIONS_SETUP.md"
+          echo "============================================================"
