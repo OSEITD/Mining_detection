@@ -1,5 +1,6 @@
 name: Automated Satellite Data Collection
 
+# Automated workflow for collecting satellite imagery from Google Earth Engine
 on:
   # Run every 5 days at 2 AM UTC
   schedule:
