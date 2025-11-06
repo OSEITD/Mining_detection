@@ -13,47 +13,37 @@ def initialize_earth_engine():
     """Initialize Earth Engine with GitHub Actions authentication"""
     print("🔧 Initializing Earth Engine...")
     
+    # Get project ID from environment or use default
+    project_id = os.getenv('GEE_PROJECT', 'ornate-justice-463107-j5')
+    print(f"   Using project: {project_id}")
+    
     # Try environment variable authentication (GitHub Actions)
     ee_token = os.getenv('EARTHENGINE_TOKEN')
     
     if ee_token:
         print("   Using EARTHENGINE_TOKEN from environment")
         try:
-            # Parse token if it's JSON and write to temp file
+            # Parse token if it's JSON
             credentials_dict = json.loads(ee_token)
             
-            # Write credentials to temporary location
-            creds_path = '/tmp/ee_credentials'
-            os.makedirs(os.path.dirname(creds_path), exist_ok=True)
-            with open(creds_path, 'w') as f:
-                json.dump(credentials_dict, f)
+            # Create OAuth2 credentials with proper Google client ID
+            from google.oauth2.credentials import Credentials
             
-            # Authenticate using the credentials file
-            os.environ['EARTHENGINE_CREDENTIALS_PATH'] = creds_path
-            ee.Authenticate(auth_mode='gcloud', quiet=True)
-            ee.Initialize(opt_url='https://earthengine-highvolume.googleapis.com')
+            creds = Credentials(
+                token=None,
+                refresh_token=credentials_dict.get('refresh_token'),
+                token_uri='https://oauth2.googleapis.com/token',
+                client_id='517222506229-vsmmajv00ul0bs7p89v5m89qs8eb9359.apps.googleusercontent.com',
+                client_secret='RUP0RZ6e0pPhDzsqIJ7KlNd1',
+                scopes=credentials_dict.get('scopes', [])
+            )
+            
+            # Initialize with project ID and credentials
+            ee.Initialize(credentials=creds, project=project_id, opt_url='https://earthengine-highvolume.googleapis.com')
             print("✅ Earth Engine initialized successfully")
             return True
         except Exception as e:
-            print(f"⚠️  Token authentication failed: {e}")
-            # Try direct initialization with credentials
-            try:
-                credentials_dict = json.loads(ee_token)
-                from google.oauth2.credentials import Credentials
-                from google.auth.transport.requests import AuthorizedSession
-                
-                creds = Credentials(
-                    token=None,
-                    refresh_token=credentials_dict.get('refresh_token'),
-                    token_uri='https://oauth2.googleapis.com/token',
-                    client_id='517222506229-vsmmajv00ul0bs7p89v5m89qs8eb9359.apps.googleusercontent.com',
-                    scopes=credentials_dict.get('scopes', [])
-                )
-                ee.Initialize(credentials=creds, opt_url='https://earthengine-highvolume.googleapis.com')
-                print("✅ Earth Engine initialized with OAuth2 credentials")
-                return True
-            except Exception as e2:
-                print(f"⚠️  OAuth2 initialization failed: {e2}")
+            print(f"⚠️  OAuth2 initialization failed: {e}")
     
     # Try service account (alternative method)
     service_account = os.getenv('GEE_SERVICE_ACCOUNT')
@@ -63,7 +53,7 @@ def initialize_earth_engine():
         print("   Using service account authentication")
         try:
             credentials = ee.ServiceAccountCredentials(service_account, key_data=private_key)
-            ee.Initialize(credentials)
+            ee.Initialize(credentials, project=project_id)
             print("✅ Earth Engine initialized with service account")
             return True
         except Exception as e:
@@ -71,7 +61,7 @@ def initialize_earth_engine():
     
     # Fallback: Try default authentication
     try:
-        ee.Initialize(opt_url='https://earthengine-highvolume.googleapis.com')
+        ee.Initialize(project=project_id, opt_url='https://earthengine-highvolume.googleapis.com')
         print("✅ Earth Engine initialized with default credentials")
         return True
     except Exception as e:
