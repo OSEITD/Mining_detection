@@ -126,7 +126,7 @@ def fetch_latest_imagery(aoi_coords, days_back=30):
     print("✅ Imagery fetched successfully")
     return composite, ndvi, metadata
 
-def get_download_url(image, name, aoi_coords, scale=10):
+def get_download_url(image, name, aoi_coords, scale=30):  # Changed from scale=10 to scale=30
     """
     Generate download URL for Earth Engine image
     
@@ -134,7 +134,7 @@ def get_download_url(image, name, aoi_coords, scale=10):
         image: Earth Engine image
         name: Export name
         aoi_coords: AOI coordinates
-        scale: Resolution in meters
+        scale: Resolution in meters (default 30m to stay under 50MB limit)
     
     Returns:
         Download URL string
@@ -147,7 +147,8 @@ def get_download_url(image, name, aoi_coords, scale=10):
             'scale': scale,
             'region': aoi,
             'filePerBand': False,
-            'format': 'GEO_TIFF'
+            'format': 'GEO_TIFF',
+            'crs': 'EPSG:4326'
         })
         return url
     except Exception as e:
@@ -211,13 +212,13 @@ def main():
     print(f"⏰ Run time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print()
     
-    # Area of Interest (Chingola, Zambia)
+    # Area of Interest (Chingola, Zambia) - Reduced size to stay under 50MB limit
     AOI_COORDS = [
-        [27.7, -12.6],
-        [28.2, -12.6],
-        [28.2, -12.4],
-        [27.7, -12.4],
-        [27.7, -12.6]
+        [27.82, -12.52],
+        [27.88, -12.52],
+        [27.88, -12.48],
+        [27.82, -12.48],
+        [27.82, -12.52]
     ]
     
     # Step 1: Initialize Earth Engine
