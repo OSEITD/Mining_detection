@@ -104,6 +104,27 @@ Expected output:
 
 ---
 
+---
+
+## 📦 BOTH SCRIPTS FIXED
+
+I've applied the same optimizations to **both workflows**:
+
+1. **`automated_inference.py`** - Mining detection workflow
+   - Used by: `.github/workflows/mining_detection.yml`
+   - Purpose: Automated U-Net mining detection
+
+2. **`gee_automation/github_actions_gee.py`** - Satellite collection workflow  
+   - Used by: `.github/workflows/gee_automation.yml`
+   - Purpose: Automated Sentinel-2 data collection
+
+Both now use:
+- ✅ 30m resolution (instead of 10m)
+- ✅ Smaller study area (29 km² instead of 121 km²)
+- ✅ Downloads will succeed (< 50 MB)
+
+---
+
 ## 🚀 Next Steps
 
 1. **Test the download fix:**
@@ -127,7 +148,8 @@ Expected output:
 ## 📝 Summary
 
 **Fixed files:**
-- ✅ `automated_inference.py` - Optimized download parameters
+- ✅ `automated_inference.py` - Optimized download parameters (mining detection)
+- ✅ `gee_automation/github_actions_gee.py` - Optimized download parameters (satellite collection)
 
 **What changed:**
 - Resolution: 10m → 30m (3x coarser)
