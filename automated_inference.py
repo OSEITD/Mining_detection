@@ -148,19 +148,39 @@ class MiningDetector:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
             
+            print(f"[INFO] Searching satellite data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            
+            # Try with relaxed cloud cover first
             collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
                 .filterBounds(geometry) \
                 .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
                 .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
                 .sort('system:time_start', False)
             
+            collection_size = collection.size()
+            print(f"[INFO] Found {collection_size.getInfo()} images with <20% cloud cover")
+            
             latest = collection.first()
             
+            # If no low-cloud images, try with higher cloud threshold
             if latest is None:
-                print("[WARNING] No recent imagery found")
+                print("[INFO] No images with <20% clouds, trying <50% threshold...")
+                collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
+                    .filterBounds(geometry) \
+                    .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')) \
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50)) \
+                    .sort('system:time_start', False)
+                latest = collection.first()
+            
+            if latest is None:
+                print("[WARNING] No recent imagery found even with relaxed cloud cover")
                 return None
             
             img_info = latest.getInfo()
+            if img_info is None or 'properties' not in img_info:
+                print("[ERROR] Failed to get image metadata")
+                return None
+            
             img_date = datetime.fromtimestamp(img_info['properties']['system:time_start'] / 1000)
             
             print(f"[OK] Found imagery from {img_date.strftime('%Y-%m-%d')}")
@@ -426,7 +446,13 @@ class MiningDetector:
         print("\nFetching latest satellite imagery...")
         imagery = self.fetch_latest_imagery(days_back)
         if not imagery:
-            return False
+            print(f"[WARNING] No satellite imagery found for the last {days_back} days")
+            print("[INFO] This might be due to:")
+            print("  • Cloud cover > 20% for all available images")
+            print("  • No recent Sentinel-2 data for Chingola area")  
+            print("  • Temporary Earth Engine API issues")
+            print("[INFO] Pipeline will exit gracefully")
+            return None  # Treat as skipped, not failed
         
         # Step 4: Download image
         output_dir = Path("temp_inference")
