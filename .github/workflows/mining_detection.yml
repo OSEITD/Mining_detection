@@ -2,13 +2,13 @@ name: 🤖 Automated Mining Detection
 
 on:
   schedule:
-    # Run every 5 days at 4 AM UTC (2 hours after satellite collection)
+    # Run every 5 days at 4 AM UTC
     - cron: '0 4 */5 * *'
-  
-  workflow_dispatch:  # Manual trigger button in GitHub Actions tab
+
+  workflow_dispatch:
     inputs:
       days_back:
-        description: 'Days back to analyze for imagery'
+        description: 'Days back to search for satellite imagery'
         required: false
         default: '30'
         type: number
@@ -23,69 +23,130 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    
+
     steps:
+      # ─────────────────────────────────────────────
+      # 1. Checkout
+      # ─────────────────────────────────────────────
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
-      - name: 🐍 Set up Python
+
+      # ─────────────────────────────────────────────
+      # 2. Python + pip cache
+      # ─────────────────────────────────────────────
+      - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-      
+          cache-dependency-path: requirements_ci.txt
+
+      # ─────────────────────────────────────────────
+      # 3. Install all dependencies (CPU-only torch)
+      # ─────────────────────────────────────────────
       - name: 📦 Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install earthengine-api
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install supabase
-          pip install numpy pillow opencv-python requests rasterio
+          pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cpu
+          pip install earthengine-api supabase requests
+          pip install numpy Pillow opencv-python-headless rasterio
           pip install pandas geopandas shapely
           pip install scikit-learn imbalanced-learn xgboost
           pip install matplotlib seaborn
+          echo "✅ All dependencies installed"
 
-      - name: 📥 Download Model from Supabase Storage
+      # ─────────────────────────────────────────────
+      # 4. Download trained model
+      #    Tries GitHub Release first, then Supabase.
+      #    Workflow continues even if model is absent.
+      # ─────────────────────────────────────────────
+      - name: 📥 Download Trained Model
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p outputs models
-          python - <<'EOF'
-          import os, requests, sys
-          url = os.environ.get('SUPABASE_URL', '')
-          key = os.environ.get('SUPABASE_KEY', '')
-          if not url or not key:
-              print('⚠️  No Supabase credentials — skipping model download')
-              sys.exit(0)
-          # Try best_model.pth first, then saved_weights.pt
-          for bucket_path, local_path in [
-              ('models/best_model.pth', 'outputs/best_model.pth'),
+          MODEL_FOUND=false
+
+          # ── Try GitHub Release asset ───────────────
+          echo "🔍 Checking GitHub Release for model..."
+          RELEASE_URL=$(curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
+            | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for a in data.get('assets', []):
+              name = a['name'].lower()
+              if 'model' in name or name.endswith('.pth') or name.endswith('.pt'):
+                  print(a['browser_download_url'])
+                  break
+          " 2>/dev/null || true)
+
+          if [ -n "$RELEASE_URL" ]; then
+            echo "⬇️  Downloading model from GitHub Release..."
+            curl -sL "$RELEASE_URL" -o outputs/best_model.pth
+            if [ -s outputs/best_model.pth ]; then
+              SIZE=$(du -sh outputs/best_model.pth | cut -f1)
+              echo "✅ Model downloaded from GitHub Release ($SIZE)"
+              MODEL_FOUND=true
+            fi
+          fi
+
+          # ── Fall back to Supabase Storage ──────────
+          if [ "$MODEL_FOUND" = "false" ] && [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then
+            echo "🔍 Trying Supabase Storage..."
+            python3 - <<'PYEOF'
+          import os, requests
+          url  = os.environ['SUPABASE_URL']
+          key  = os.environ['SUPABASE_KEY']
+          targets = [
+              ('models/best_model.pth',   'outputs/best_model.pth'),
               ('models/saved_weights.pt', 'models/saved_weights.pt'),
-          ]:
-              dl_url = f"{url}/storage/v1/object/public/mining-models/{bucket_path}"
-              r = requests.get(dl_url, headers={'apikey': key}, timeout=60)
-              if r.status_code == 200:
+          ]
+          for bucket_path, local_path in targets:
+              dl = f"{url}/storage/v1/object/public/mining-models/{bucket_path}"
+              r  = requests.get(dl, headers={'apikey': key}, timeout=120)
+              if r.status_code == 200 and len(r.content) > 1024:
                   with open(local_path, 'wb') as f:
                       f.write(r.content)
-                  print(f'✅ Downloaded {local_path} ({len(r.content)//1024//1024} MB)')
+                  mb = len(r.content) // 1048576
+                  print(f'✅ Downloaded {local_path} ({mb} MB) from Supabase')
+                  break
               else:
-                  print(f'⚠️  {bucket_path} not found in Supabase storage (status {r.status_code})')
-          EOF
-      
+                  print(f'⚠️  {bucket_path} not in Supabase storage (HTTP {r.status_code})')
+          PYEOF
+          fi
+
+          # ── Summary ────────────────────────────────
+          if [ -f outputs/best_model.pth ] || [ -f models/saved_weights.pt ]; then
+            echo "✅ Model ready for inference"
+          else
+            echo "⚠️  No model found — pipeline will run in monitoring-only mode"
+          fi
+
+      # ─────────────────────────────────────────────
+      # 5. Authenticate GEE
+      # ─────────────────────────────────────────────
       - name: 🔐 Authenticate Google Earth Engine
         env:
           GEE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GEE_SERVICE_ACCOUNT_EMAIL }}
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         run: |
-          echo "$GEE_SERVICE_ACCOUNT_KEY" > /tmp/gee_key.json
-          python -c "
-          import ee, json
-          credentials = ee.ServiceAccountCredentials('$GEE_SERVICE_ACCOUNT_EMAIL', '/tmp/gee_key.json')
-          ee.Initialize(credentials)
+          printf '%s' "$GEE_SERVICE_ACCOUNT_KEY" > /tmp/gee_key.json
+          python3 -c "
+          import ee, os
+          email = os.environ['GEE_SERVICE_ACCOUNT_EMAIL']
+          creds = ee.ServiceAccountCredentials(email, '/tmp/gee_key.json')
+          ee.Initialize(creds)
           print('✅ GEE authenticated successfully')
           "
-      
+
+      # ─────────────────────────────────────────────
+      # 6. Run the detection pipeline
+      # ─────────────────────────────────────────────
       - name: 🤖 Run Mining Detection Pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -93,28 +154,42 @@ jobs:
           GEE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GEE_SERVICE_ACCOUNT_EMAIL }}
           GEE_SERVICE_ACCOUNT_KEY: /tmp/gee_key.json
         run: |
-          python automated_inference.py \
-            --days-back ${{ github.event.inputs.days_back || 30 }} \
-            ${{ github.event.inputs.force_alert == 'true' && '--force-alert' || '' }}
-      
+          DAYS="${{ github.event.inputs.days_back }}"
+          DAYS="${DAYS:-30}"
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force_alert }}" = "true" ]; then
+            FORCE_FLAG="--force-alert"
+          fi
+          python3 automated_inference.py --days-back "$DAYS" $FORCE_FLAG
+
+      # ─────────────────────────────────────────────
+      # 7. Cleanup credentials
+      # ─────────────────────────────────────────────
       - name: 🧹 Cleanup
         if: always()
         run: |
           rm -f /tmp/gee_key.json
           rm -rf temp_inference
-      
-      - name: 📊 Upload Results (if failed)
+
+      # ─────────────────────────────────────────────
+      # 8. Upload logs on failure
+      # ─────────────────────────────────────────────
+      - name: 📊 Upload Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: detection-logs
+          name: detection-logs-${{ github.run_id }}
           path: |
             temp_inference/
             *.log
-          retention-days: 7
-      
-      - name: ✅ Success Notification
+          if-no-files-found: ignore
+
+      - name: ✅ Pipeline Complete
         if: success()
         run: |
-          echo "🎉 Mining detection completed successfully!"
-          echo "📊 Check your dashboard for results"
+          echo "============================================"
+          echo "✅ Mining Detection Pipeline Completed"
+          echo "📅 Run date : $(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "🌍 Area     : Chingola, Zambia"
+          echo "📊 Results saved to Supabase"
+          echo "============================================"
