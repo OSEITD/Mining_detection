@@ -47,9 +47,10 @@ jobs:
       - name: 📦 Install Dependencies
         run: |
           pip install --upgrade pip
+          pip install "numpy<2"
           pip install torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cpu
           pip install earthengine-api supabase requests
-          pip install numpy Pillow opencv-python-headless rasterio
+          pip install Pillow opencv-python-headless rasterio
           pip install pandas geopandas shapely
           pip install scikit-learn imbalanced-learn xgboost
           pip install matplotlib seaborn
@@ -69,30 +70,40 @@ jobs:
           mkdir -p outputs models
           MODEL_FOUND=false
 
-          # ── Try GitHub Release asset ───────────────
+          # ── Try GitHub Release asset (authenticated API download) ──
           echo "🔍 Checking GitHub Release for model..."
-          RELEASE_URL=$(curl -s \
+          ASSET_INFO=$(curl -s \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest" \
-            | python3 -c "
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest")
+
+          ASSET_ID=$(echo "$ASSET_INFO" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
           for a in data.get('assets', []):
               name = a['name'].lower()
-              if 'model' in name or name.endswith('.pth') or name.endswith('.pt'):
-                  print(a['browser_download_url'])
+              if name.endswith('.pth') or name.endswith('.pt') or 'model' in name or 'weight' in name:
+                  print(a['id'])
                   break
           " 2>/dev/null || true)
 
-          if [ -n "$RELEASE_URL" ]; then
-            echo "⬇️  Downloading model from GitHub Release..."
-            curl -sL "$RELEASE_URL" -o outputs/best_model.pth
-            if [ -s outputs/best_model.pth ]; then
-              SIZE=$(du -sh outputs/best_model.pth | cut -f1)
+          if [ -n "$ASSET_ID" ]; then
+            echo "⬇️  Downloading model asset ID $ASSET_ID from GitHub Release..."
+            curl -sL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" \
+              -o models/saved_weights.pt
+            if [ -s models/saved_weights.pt ]; then
+              SIZE=$(du -sh models/saved_weights.pt | cut -f1)
               echo "✅ Model downloaded from GitHub Release ($SIZE)"
               MODEL_FOUND=true
+            else
+              echo "⚠️  Download produced empty file"
+              rm -f models/saved_weights.pt
             fi
+          else
+            echo "⚠️  No model asset found in latest GitHub Release"
           fi
 
           # ── Fall back to Supabase Storage ──────────
