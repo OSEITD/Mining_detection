@@ -708,7 +708,7 @@ class SimpleCNN(nn.Module):
 class UNet(nn.Module):
     """U-Net architecture for semantic segmentation"""
     
-    def __init__(self, in_channels, num_classes=2):
+    def __init__(self, in_channels, num_classes=1):
         super(UNet, self).__init__()
         
         # Encoder
@@ -743,11 +743,9 @@ class UNet(nn.Module):
             nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(0.1),  
             nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(0.1)
+            nn.ReLU(inplace=True)
         )
     
     def forward(self, x):
@@ -799,7 +797,7 @@ class DeepLearningPipeline:
             self.model = SimpleCNN(in_channels, num_classes=2)
         elif model_type == 'unet':
             print("Creating U-Net model...")
-            self.model = UNet(in_channels, num_classes=2)
+            self.model = UNet(in_channels, num_classes=1)
         
         if self.model is None:
             raise ValueError(f"Unknown model type: {model_type}")

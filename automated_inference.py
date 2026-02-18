@@ -95,7 +95,7 @@ class MiningDetector:
                     print(f"Using fallback model: {fallback_path}")
                     # Load old-style model (3-channel U-Net)
                     from mining_hotspot_detection import UNet as NewUNet
-                    self.model = NewUNet(in_channels=3, num_classes=2)
+                    self.model = NewUNet(in_channels=3, num_classes=1)
                     checkpoint = torch.load(fallback_path, map_location=DEVICE)
                     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
                         self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -115,7 +115,7 @@ class MiningDetector:
                 in_channels = checkpoint.get('in_channels', 19)
                 
                 if model_type == 'unet':
-                    self.model = UNet(in_channels=in_channels, num_classes=2)
+                    self.model = UNet(in_channels=in_channels, num_classes=1)
                 else:
                     self.model = SimpleCNN(in_channels=in_channels, num_classes=2)
                 
