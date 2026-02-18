@@ -40,7 +40,7 @@ jobs:
           pip install earthengine-api
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install supabase
-          pip install numpy pillow opencv-python requests
+          pip install numpy pillow opencv-python requests rasterio
       
       - name: 🔐 Authenticate Google Earth Engine
         env:

@@ -65,6 +65,11 @@ desktop.ini
 *.log
 temp_inference/
 
+# Nested repos / expo project (has its own git history)
+ChingolaMiningMonitorExpo/
+ChingolaMiningMonitorNew/
+MiningMonitorApp/
+
 # Android build outputs
 android-app/app/build/
 android-app/.gradle/
