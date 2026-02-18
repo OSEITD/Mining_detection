@@ -1,0 +1,2 @@
+rootProject.name = "Mining Detector"
+include ':app'

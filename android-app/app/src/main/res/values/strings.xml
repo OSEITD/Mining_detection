@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mining Detector</string>
+    <string name="loading">Loading Mining Detection System...</string>
+    <string name="connection_error">Connection Error</string>
+    <string name="connection_message">Make sure your computer is running the Streamlit server and both devices are on the same WiFi network.</string>
+</resources>

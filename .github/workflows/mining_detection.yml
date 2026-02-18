@@ -1,0 +1,87 @@
+name: 🤖 Automated Mining Detection
+
+on:
+  schedule:
+    # Run every 5 days at 4 AM UTC (2 hours after satellite collection)
+    - cron: '0 4 */5 * *'
+  
+  workflow_dispatch:  # Manual trigger button in GitHub Actions tab
+    inputs:
+      days_back:
+        description: 'Days back to analyze for imagery'
+        required: false
+        default: '30'
+        type: number
+      force_alert:
+        description: 'Send alert even if change is below threshold'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  detect-mining:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install earthengine-api
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install supabase
+          pip install numpy pillow opencv-python requests
+      
+      - name: 🔐 Authenticate Google Earth Engine
+        env:
+          GEE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GEE_SERVICE_ACCOUNT_EMAIL }}
+          GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          echo "$GEE_SERVICE_ACCOUNT_KEY" > /tmp/gee_key.json
+          python -c "
+          import ee, json
+          credentials = ee.ServiceAccountCredentials('$GEE_SERVICE_ACCOUNT_EMAIL', '/tmp/gee_key.json')
+          ee.Initialize(credentials)
+          print('✅ GEE authenticated successfully')
+          "
+      
+      - name: 🤖 Run Mining Detection Pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GEE_SERVICE_ACCOUNT_EMAIL }}
+          GEE_SERVICE_ACCOUNT_KEY: /tmp/gee_key.json
+        run: |
+          python automated_inference.py \
+            --days-back ${{ github.event.inputs.days_back || 30 }} \
+            ${{ github.event.inputs.force_alert == 'true' && '--force-alert' || '' }}
+      
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          rm -f /tmp/gee_key.json
+          rm -rf temp_inference
+      
+      - name: 📊 Upload Results (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detection-logs
+          path: |
+            temp_inference/
+            *.log
+          retention-days: 7
+      
+      - name: ✅ Success Notification
+        if: success()
+        run: |
+          echo "🎉 Mining detection completed successfully!"
+          echo "📊 Check your dashboard for results"

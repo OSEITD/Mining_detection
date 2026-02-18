@@ -1,0 +1,17 @@
+{
+  "name": "Default AOI - Sample Region",
+  "center_lat": -13.04,
+  "center_lon": 28.6077,
+  "bounds": [
+    28.5871,
+    -13.0781,
+    28.6283,
+    -13.0019
+  ],
+  "date_range": {
+    "start": "2025-11-01",
+    "end": "2025-11-30"
+  },
+  "created_at": "2025-11-16T00:00:00",
+  "investigation": "November 2025 gold rush - comparing pre-rush (Nov 1-14) vs post-rush (Nov 15-30)"
+}

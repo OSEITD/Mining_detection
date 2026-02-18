@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.env
+.venv
+
+# Credentials & secrets (NEVER commit these)
+*.json
+!manifest.json
+!static/manifest.json
+!aoi_config.json
+ornate-justice-*.json
+spedoc-*.json
+*-firebase-adminsdk-*.json
+*service-account*.json
+.env*
+secrets/
+
+# Large data/model files
+*.tif
+*.geotiff
+*.pt
+*.pth
+*.h5
+*.pkl
+*.zip
+data/after/
+data/before/
+data_kantolomba/
+Mining_Analysis_Results/
+mining_zones_output/
+outputs/
+models/saved_weights.pt
+
+# Executables
+ngrok.exe
+*.exe
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+temp_inference/
+
+# Android build outputs
+android-app/app/build/
+android-app/.gradle/
+android-app/local.properties
+
+# React Native
+ChingolaMiningMonitorNew/node_modules/
+ChingolaMiningMonitorNew/.expo/
+ChingolaMiningMonitorExpo/node_modules/
+MiningMonitorApp/node_modules/

@@ -1,0 +1,17 @@
+# Automated Mining Detection - Requirements
+# Install with: pip install -r requirements_automation.txt
+
+# Core dependencies
+earthengine-api>=0.1.380
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python>=4.8.0
+requests>=2.31.0
+
+# Database
+supabase>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0

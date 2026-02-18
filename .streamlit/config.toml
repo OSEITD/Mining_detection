@@ -1,0 +1,24 @@
+[server]
+# Allow access from any IP address
+headless = true
+address = "localhost"
+port = 8501
+
+# Enable CORS for cross-origin requests
+enableCORS = true
+enableXsrfProtection = true
+
+# Increase file upload size limit (default is 200MB)
+maxUploadSize = 500
+
+[browser]
+# Don't automatically open browser when starting
+gatherUsageStats = false
+
+[theme]
+# Optional: Configure theme colors
+primaryColor = "#667eea"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"
