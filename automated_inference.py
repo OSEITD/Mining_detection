@@ -21,7 +21,7 @@ import argparse
 
 # Import from the new hotspot detection pipeline
 from mining_hotspot_detection import (
-    Config, SimpleCNN, UNet, FeaturePreprocessor, DeepLearningPipeline
+    Config, SimpleCNN, FeaturePreprocessor, DeepLearningPipeline
 )
 
 # Configuration
@@ -115,7 +115,8 @@ class MiningDetector:
                 in_channels = checkpoint.get('in_channels', 19)
                 
                 if model_type == 'unet':
-                    self.model = UNet(in_channels=in_channels, num_classes=1)
+                    from mining_hotspot_detection import UNet as FreshUNet
+                    self.model = FreshUNet(in_channels=in_channels, num_classes=1)
                 else:
                     self.model = SimpleCNN(in_channels=in_channels, num_classes=2)
                 
