@@ -42,8 +42,36 @@ jobs:
           pip install supabase
           pip install numpy pillow opencv-python requests rasterio
           pip install pandas geopandas shapely
-          pip install scikit-learn imbalanced-learn
+          pip install scikit-learn imbalanced-learn xgboost
           pip install matplotlib seaborn
+
+      - name: 📥 Download Model from Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          mkdir -p outputs models
+          python - <<'EOF'
+          import os, requests, sys
+          url = os.environ.get('SUPABASE_URL', '')
+          key = os.environ.get('SUPABASE_KEY', '')
+          if not url or not key:
+              print('⚠️  No Supabase credentials — skipping model download')
+              sys.exit(0)
+          # Try best_model.pth first, then saved_weights.pt
+          for bucket_path, local_path in [
+              ('models/best_model.pth', 'outputs/best_model.pth'),
+              ('models/saved_weights.pt', 'models/saved_weights.pt'),
+          ]:
+              dl_url = f"{url}/storage/v1/object/public/mining-models/{bucket_path}"
+              r = requests.get(dl_url, headers={'apikey': key}, timeout=60)
+              if r.status_code == 200:
+                  with open(local_path, 'wb') as f:
+                      f.write(r.content)
+                  print(f'✅ Downloaded {local_path} ({len(r.content)//1024//1024} MB)')
+              else:
+                  print(f'⚠️  {bucket_path} not found in Supabase storage (status {r.status_code})')
+          EOF
       
       - name: 🔐 Authenticate Google Earth Engine
         env:

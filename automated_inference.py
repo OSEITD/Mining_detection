@@ -415,7 +415,11 @@ class MiningDetector:
         
         # Step 2: Load model
         if not self.load_model():
-            return False
+            print("\n⚠️  WARNING: No trained model found. Skipping detection pipeline.")
+            print("   To enable inference, upload model to Supabase Storage bucket 'mining-models':")
+            print("   • outputs/best_model.pth  OR  models/saved_weights.pt")
+            print("   Detection pipeline cannot run without a trained model.")
+            return None  # None = skipped (not failed)
         
         # Step 3: Fetch latest imagery
         print("\nFetching latest satellite imagery...")
@@ -507,12 +511,13 @@ def main():
     args = parser.parse_args()
     
     detector = MiningDetector()
-    success = detector.run_detection_pipeline(
+    result = detector.run_detection_pipeline(
         days_back=args.days_back,
         force_alert=args.force_alert
     )
     
-    sys.exit(0 if success else 1)
+    # None = skipped (no model), True = success, False = error
+    sys.exit(0 if result is not False else 1)
 
 
 if __name__ == "__main__":
