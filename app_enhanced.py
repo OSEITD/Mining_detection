@@ -448,7 +448,7 @@ def load_classification_reports():
                 pass
     return reports
 
-# === ENHANCED DATA FETCHING FUNCTIONS ===
+# === DATABASE SCHEMA VALIDATION ===\ndef validate_database_schema():\n    \"\"\"Validate that required tables and columns exist\"\"\"\n    try:\n        supabase = get_supabase_client()\n        \n        # Test key table/column combinations\n        schema_tests = [\n            {'table': 'mining_alerts', 'columns': ['sent_at', 'status', 'alert_type', 'message']},\n            {'table': 'mining_predictions', 'columns': ['prediction_date', 'mining_area_ha']},\n            {'table': 'field_verifications', 'columns': ['zone_id', 'is_confirmed_mine']},\n            {'table': 'mining_sites', 'columns': ['detected_date', 'area_ha']}\n        ]\n        \n        validation_results = []\n        \n        for test in schema_tests:\n            try:\n                # Try to select a single record with the required columns\n                result = supabase.table(test['table'])\\\n                    .select(','.join(test['columns']))\\\n                    .limit(1)\\\n                    .execute()\n                validation_results.append(f\"✅ {test['table']}: OK\")\n            except Exception as e:\n                validation_results.append(f\"❌ {test['table']}: {str(e)[:100]}\")\n        \n        return validation_results\n    except Exception as e:\n        return [f\"❌ Schema validation failed: {e}\"]\n\n# === ENHANCED DATA FETCHING FUNCTIONS ===
 
 def should_refresh(data_type):
     """Check if data should be refreshed based on interval"""
@@ -498,9 +498,10 @@ def fetch_latest_alerts(force_refresh=False):
         if force_refresh:
             st.cache_data.clear()
         
+        # Use sent_at column as per schema (not created_at)
         response = supabase.table('mining_alerts')\
             .select('*')\
-            .order('created_at', desc=True)\
+            .order('sent_at', desc=True)\
             .limit(20)\
             .execute()
         
@@ -510,6 +511,8 @@ def fetch_latest_alerts(force_refresh=False):
         return []
     except Exception as e:
         st.error(f"Error fetching alerts: {e}")
+        # Log the specific error for debugging
+        print(f"Alert fetch error details: {e}")
         return []
 
 @st.cache_data(ttl=120)  # Dashboard data refresh
@@ -523,8 +526,8 @@ def fetch_dashboard_metrics(force_refresh=False):
         
         metrics = {}
         
-        # Get counts from various tables
-        tables = ['mining_predictions', 'mining_alerts', 'field_verifications', 'detected_zones']
+        # Get counts from various tables that exist in the schema
+        tables = ['mining_predictions', 'mining_alerts', 'field_verifications', 'mining_sites']
         
         for table in tables:
             try:
@@ -653,14 +656,34 @@ def fetch_notifications():
     """Fetch unread notifications from Supabase"""
     try:
         supabase = get_supabase_client()
+        
+        # Fetch mining alerts using correct schema columns
+        # Schema: mining_alerts has sent_at, read_at, status columns
         response = supabase.table('mining_alerts') \
             .select('*') \
             .eq('status', 'unread') \
             .order('sent_at', desc=True) \
+            .limit(10) \
             .execute()
-        return response.data if response.data else []
+        
+        notifications = response.data if response.data else []
+        
+        # Convert alerts to notification format using correct column names
+        formatted_notifications = []
+        for alert in notifications:
+            formatted_notifications.append({
+                'id': f"alert_{alert['id']}",
+                'title': f"Mining Alert: {alert.get('alert_type', 'Unknown')}",
+                'message': alert.get('message', 'No message')[:100] + ('...' if len(alert.get('message', '')) > 100 else ''),
+                'type': 'mining_alert',
+                'created_at': alert['sent_at'],  # Map sent_at to created_at for display
+                'metadata': alert
+            })
+        
+        return formatted_notifications
     except Exception as e:
         st.error(f"Error fetching notifications: {e}")
+        print(f"Notification fetch error details: {e}")
         return []
 
 def display_notifications():
@@ -1392,10 +1415,10 @@ def main_dashboard():
         try:
             supabase = get_supabase_client()
             
-            # Get detection statistics
-            detections_2025 = supabase.table('detected_zones').select('*').gte('detection_date', '2025-01-01').execute()
-            detections_2016 = supabase.table('detected_zones').select('*').lt('detection_date', '2017-01-01').execute()
-            all_detections = supabase.table('detected_zones').select('*').execute()
+            # Get detection statistics from mining_sites (not detected_zones)
+            detections_2025 = supabase.table('mining_sites').select('*').gte('detected_date', '2025-01-01').execute()
+            detections_2016 = supabase.table('mining_sites').select('*').lt('detected_date', '2017-01-01').execute()
+            all_detections = supabase.table('mining_sites').select('*').execute()
             
             # Calculate metrics
             total_zones_2025 = len(detections_2025.data) if detections_2025.data else 0
