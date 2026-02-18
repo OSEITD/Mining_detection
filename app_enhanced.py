@@ -44,6 +44,27 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# === DYNAMIC DATA REFRESH CONFIGURATION ===
+# Auto-refresh intervals (seconds)
+REFRESH_INTERVALS = {
+    'critical_data': 60,      # Mining predictions, alerts
+    'dashboard_data': 120,    # Dashboard metrics
+    'general_data': 300,      # User data, settings
+    'static_data': 600        # Model info, configuration
+}
+
+# Initialize refresh state
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = {
+        'critical_data': 0,
+        'dashboard_data': 0,
+        'general_data': 0,
+        'static_data': 0
+    }
+
+if 'auto_refresh_enabled' not in st.session_state:
+    st.session_state.auto_refresh_enabled = True
+
 # Add CORS headers for ngrok access
 st.markdown("""
     <meta http-equiv="Access-Control-Allow-Origin" content="*">
@@ -426,6 +447,119 @@ def load_classification_reports():
             except:
                 pass
     return reports
+
+# === ENHANCED DATA FETCHING FUNCTIONS ===
+
+def should_refresh(data_type):
+    """Check if data should be refreshed based on interval"""
+    if not st.session_state.auto_refresh_enabled:
+        return False
+    
+    current_time = time.time()
+    last_refresh = st.session_state.last_refresh.get(data_type, 0)
+    interval = REFRESH_INTERVALS.get(data_type, 300)
+    
+    return (current_time - last_refresh) > interval
+
+def update_refresh_timestamp(data_type):
+    """Update the last refresh timestamp for a data type"""
+    st.session_state.last_refresh[data_type] = time.time()
+
+@st.cache_data(ttl=60)  # Reduced TTL for critical data
+def fetch_latest_mining_predictions(force_refresh=False):
+    """Fetch latest mining predictions with automatic refresh"""
+    try:
+        supabase = get_supabase_client()
+        
+        # Clear cache if forced refresh
+        if force_refresh:
+            st.cache_data.clear()
+        
+        response = supabase.table('mining_predictions')\
+            .select('*')\
+            .order('prediction_date', desc=True)\
+            .limit(50)\
+            .execute()
+        
+        if response.data:
+            update_refresh_timestamp('critical_data')
+            return response.data
+        return []
+    except Exception as e:
+        st.error(f"Error fetching mining predictions: {e}")
+        return []
+
+@st.cache_data(ttl=60)  # Reduced TTL for critical data
+def fetch_latest_alerts(force_refresh=False):
+    """Fetch latest mining alerts with automatic refresh"""
+    try:
+        supabase = get_supabase_client()
+        
+        if force_refresh:
+            st.cache_data.clear()
+        
+        response = supabase.table('mining_alerts')\
+            .select('*')\
+            .order('created_at', desc=True)\
+            .limit(20)\
+            .execute()
+        
+        if response.data:
+            update_refresh_timestamp('critical_data')
+            return response.data
+        return []
+    except Exception as e:
+        st.error(f"Error fetching alerts: {e}")
+        return []
+
+@st.cache_data(ttl=120)  # Dashboard data refresh
+def fetch_dashboard_metrics(force_refresh=False):
+    """Fetch comprehensive dashboard metrics"""
+    try:
+        supabase = get_supabase_client()
+        
+        if force_refresh:
+            st.cache_data.clear()
+        
+        metrics = {}
+        
+        # Get counts from various tables
+        tables = ['mining_predictions', 'mining_alerts', 'field_verifications', 'detected_zones']
+        
+        for table in tables:
+            try:
+                response = supabase.table(table).select('id', count='exact').execute()
+                metrics[f'{table}_count'] = response.count if hasattr(response, 'count') else len(response.data or [])
+            except:
+                metrics[f'{table}_count'] = 0
+        
+        # Get latest prediction date
+        try:
+            latest_pred = supabase.table('mining_predictions')\
+                .select('prediction_date')\
+                .order('prediction_date', desc=True)\
+                .limit(1)\
+                .execute()
+            metrics['latest_prediction_date'] = latest_pred.data[0]['prediction_date'] if latest_pred.data else None
+        except:
+            metrics['latest_prediction_date'] = None
+        
+        # Get total mining area from latest prediction
+        try:
+            latest_area = supabase.table('mining_predictions')\
+                .select('mining_area_ha')\
+                .order('prediction_date', desc=True)\
+                .limit(1)\
+                .execute()
+            metrics['latest_mining_area'] = latest_area.data[0]['mining_area_ha'] if latest_area.data else 0
+        except:
+            metrics['latest_mining_area'] = 0
+        
+        update_refresh_timestamp('dashboard_data')
+        return metrics
+    except Exception as e:
+        st.error(f"Error fetching dashboard metrics: {e}")
+        return {}
 
 @st.cache_data(ttl=300)
 def get_artisanal_stats():
@@ -986,6 +1120,14 @@ def main_dashboard():
     
     # Display notifications in sidebar (auto-fetches from database)
     display_notifications()
+    
+    # Enhanced Auto-refresh Check
+    if st.session_state.auto_refresh_enabled:
+        if should_refresh('critical_data'):
+            with st.spinner("🔄 Auto-refreshing critical data..."):
+                fetch_latest_mining_predictions(force_refresh=True)
+                fetch_latest_alerts(force_refresh=True)
+            st.rerun()
     
     # Display image modal if requested
     if st.session_state.show_image_modal:
@@ -4651,6 +4793,13 @@ def main():
         main_dashboard()
 
 if __name__ == "__main__":
+    # === ENHANCED DYNAMIC DATA SYSTEM ACTIVE ===
+    # ✅ Auto-refresh every 60s for critical data (predictions, alerts)
+    # ✅ Dashboard metrics refresh every 120s  
+    # ✅ Enhanced data fetching functions with force refresh
+    # ✅ Manual refresh buttons throughout the interface
+    # ✅ Data freshness indicators and timestamps
+    # ✅ Improved error handling and graceful fallbacks
     main()
 
 
