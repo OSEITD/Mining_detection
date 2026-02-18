@@ -31,7 +31,7 @@ jobs:
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
           cache: 'pip'
       
       - name: 📦 Install Dependencies
@@ -41,6 +41,9 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install supabase
           pip install numpy pillow opencv-python requests rasterio
+          pip install pandas geopandas shapely
+          pip install scikit-learn imbalanced-learn
+          pip install matplotlib seaborn
       
       - name: 🔐 Authenticate Google Earth Engine
         env:
